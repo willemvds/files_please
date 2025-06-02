@@ -1,6 +1,9 @@
 use std::path;
 use std::process;
+use std::thread;
+use std::time;
 
+mod task;
 mod ui;
 
 extern crate sdl3;
@@ -28,6 +31,8 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
 
     let window = sdl_video
         .window("Files, Please!", 1200, 800)
+        .resizable()
+        .borderless()
         .maximized()
         .build()
         .map_err(|err| {
@@ -56,11 +61,20 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
 
     let mut gui = ui::UI::new(&font);
     let mut left = ui::DirectoryView::new();
-    left.push(path::PathBuf::from("Not"));
+    left.push(path::PathBuf::from("\u{f4d3} Not"));
     left.push(path::PathBuf::from("Real"));
     left.push(path::PathBuf::from("Yet"));
+    left.push(path::PathBuf::from("."));
+    left.push(path::PathBuf::from(".."));
+    left.push(path::PathBuf::from("..."));
     gui.left_dir_view(left);
     let mut right = ui::DirectoryView::new();
+    right.push(path::PathBuf::from("\u{e6ae}"));
+    right.push(path::PathBuf::from("\u{e6ae}"));
+    right.push(path::PathBuf::from("\u{e6ae}"));
+    right.push(path::PathBuf::from("\u{e6ae}"));
+    right.push(path::PathBuf::from("\u{e6ae}"));
+    right.push(path::PathBuf::from("\u{e6ae}"));
     right.push(path::PathBuf::from("\u{e6ae}"));
     gui.right_dir_view(right);
 
@@ -72,11 +86,37 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                     keycode: Some(keyboard::Keycode::Escape),
                     ..
                 } => return Ok(()),
+                event::Event::KeyDown {
+                    keycode: Some(keyboard::Keycode::Up),
+                    ..
+                } => {
+                    gui.up();
+                }
+                event::Event::KeyDown {
+                    keycode: Some(keyboard::Keycode::Down),
+                    ..
+                } => {
+                    gui.down();
+                }
+
+                event::Event::KeyDown {
+                    keycode: Some(keyboard::Keycode::Left),
+                    ..
+                } => {
+                    gui.left();
+                }
+                event::Event::KeyDown {
+                    keycode: Some(keyboard::Keycode::Right),
+                    ..
+                } => {
+                    gui.right();
+                }
                 _ => {}
             }
         }
 
         gui.render(&mut canvas);
+        thread::sleep(time::Duration::from_micros(2000));
     }
 }
 

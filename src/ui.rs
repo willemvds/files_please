@@ -8,15 +8,41 @@ use sdl3::video;
 
 pub struct DirectoryView {
     entries: Vec<path::PathBuf>,
+    selected_index: Option<usize>,
 }
 
 impl DirectoryView {
     pub fn new() -> DirectoryView {
-        DirectoryView { entries: vec![] }
+        DirectoryView {
+            entries: vec![],
+            selected_index: None,
+        }
     }
 
     pub fn push(&mut self, entry: path::PathBuf) {
         self.entries.push(entry)
+    }
+
+    pub fn select(&mut self, index: usize) {
+        if index < self.entries.len() {
+            self.selected_index = Some(index)
+        }
+    }
+
+    pub fn up(&mut self) {
+        if let Some(current) = self.selected_index {
+            if current > 0 {
+                self.selected_index = Some(current - 1)
+            }
+        }
+    }
+
+    pub fn down(&mut self) {
+        if let Some(current) = self.selected_index {
+            if current + 1 < self.entries.len() {
+                self.selected_index = Some(current + 1)
+            }
+        }
     }
 
     fn render(
@@ -31,7 +57,18 @@ impl DirectoryView {
 
         let padding = 5.0;
         let mut next = 0.0;
-        for entry in self.entries.iter() {
+        for (idx, entry) in self.entries.iter().enumerate() {
+            if let Some(selected_index) = self.selected_index {
+                if selected_index == idx {
+                    canvas.set_draw_color(pixels::Color::RGB(70, 50, 122));
+                    let _ = canvas.fill_rect(render::FRect::new(
+                        region.x,
+                        region.y + padding + next + 1.0,
+                        region.w,
+                        22.0,
+                    ));
+                }
+            }
             if let Some(text) = entry.clone().into_os_string().to_str() {
                 let surface = font.render(text).blended(pixels::Color::RGB(22, 255, 44))?;
                 let tc = canvas.texture_creator();
@@ -76,7 +113,13 @@ impl TasksView {
     }
 }
 
+enum Side {
+    Left,
+    Right,
+}
+
 pub struct UI<'ui> {
+    active: Side,
     font: &'ui sdl3::ttf::Font<'ui, 'ui>,
     lhs: DirectoryView,
     rhs: DirectoryView,
@@ -86,6 +129,7 @@ pub struct UI<'ui> {
 impl<'ui> UI<'ui> {
     pub fn new(font: &'ui sdl3::ttf::Font) -> UI<'ui> {
         UI {
+            active: Side::Left,
             font: font,
             lhs: DirectoryView::new(),
             rhs: DirectoryView::new(),
@@ -94,11 +138,35 @@ impl<'ui> UI<'ui> {
     }
 
     pub fn left_dir_view(&mut self, dv: DirectoryView) {
-        self.lhs = dv
+        self.lhs = dv;
+        self.lhs.select(1);
     }
 
     pub fn right_dir_view(&mut self, dv: DirectoryView) {
-        self.rhs = dv
+        self.rhs = dv;
+        self.rhs.select(0);
+    }
+
+    pub fn up(&mut self) {
+        match self.active {
+            Side::Left => self.lhs.up(),
+            Side::Right => self.rhs.up(),
+        }
+    }
+
+    pub fn down(&mut self) {
+        match self.active {
+            Side::Left => self.lhs.down(),
+            Side::Right => self.rhs.down(),
+        }
+    }
+
+    pub fn left(&mut self) {
+        self.active = Side::Left
+    }
+
+    pub fn right(&mut self) {
+        self.active = Side::Right
     }
 
     pub fn render(&self, canvas: &mut render::Canvas<video::Window>) {
@@ -109,20 +177,24 @@ impl<'ui> UI<'ui> {
         let ww = w as f32;
         let hh = h as f32;
 
+        let active_colour = pixels::Color::RGB(90, 90, 90);
+        let inactive_colour = pixels::Color::RGB(50, 50, 50);
+
         let left_region = render::FRect::new(0.0, 0.0, ww / 2.0, hh);
-        let _ = self.lhs.render(
-            canvas,
-            left_region,
-            pixels::Color::RGB(90, 90, 90),
-            self.font,
-        );
+        let left_colour = match self.active {
+            Side::Left => active_colour,
+            Side::Right => inactive_colour,
+        };
+
+        let right_colour = match self.active {
+            Side::Right => active_colour,
+            Side::Left => inactive_colour,
+        };
+        let _ = self.lhs.render(canvas, left_region, left_colour, self.font);
         let right_region = render::FRect::new(ww / 2.0, 0.0, ww / 2.0, hh);
-        let _ = self.rhs.render(
-            canvas,
-            right_region,
-            pixels::Color::RGB(50, 50, 50),
-            self.font,
-        );
+        let _ = self
+            .rhs
+            .render(canvas, right_region, right_colour, self.font);
 
         let tasks_region = render::FRect::new(0.0, hh - 200.0, ww, 200.0);
         let _ = self.tv.render(
