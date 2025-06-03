@@ -70,17 +70,17 @@ impl DirectoryView {
         canvas: &mut render::Canvas<video::Window>,
         theme: &Theme,
         region: render::FRect,
-        colour: pixels::Color,
+        active: bool,
         font: &sdl3::ttf::Font,
     ) -> Result<(), Box<dyn error::Error>> {
-        canvas.set_draw_color(colour);
+        canvas.set_draw_color(if active { theme.active } else { theme.inactive });
         let _ = canvas.fill_rect(region);
 
         let padding = 5.0;
         let mut next = 0.0;
         for (idx, entry) in self.entries.iter().enumerate() {
             if let Some(selected_index) = self.selected_index {
-                if selected_index == idx {
+                if active && selected_index == idx {
                     canvas.set_draw_color(theme.selected);
                     let _ = canvas.fill_rect(render::FRect::new(
                         region.x,
@@ -204,22 +204,22 @@ impl<'ui> UI<'ui> {
         let inactive_colour = pixels::Color::RGB(50, 50, 50);
 
         let left_region = render::FRect::new(0.0, 0.0, ww / 2.0, hh);
-        let left_colour = match self.active {
-            Side::Left => active_colour,
-            Side::Right => inactive_colour,
+        let left_active = match self.active {
+            Side::Left => true,
+            Side::Right => false,
         };
 
-        let right_colour = match self.active {
-            Side::Right => active_colour,
-            Side::Left => inactive_colour,
+        let right_active = match self.active {
+            Side::Left => false,
+            Side::Right => true,
         };
         let _ = self
             .lhs
-            .render(canvas, &self.theme, left_region, left_colour, self.font);
+            .render(canvas, &self.theme, left_region, left_active, self.font);
         let right_region = render::FRect::new(ww / 2.0, 0.0, ww / 2.0, hh);
         let _ = self
             .rhs
-            .render(canvas, &self.theme, right_region, right_colour, self.font);
+            .render(canvas, &self.theme, right_region, right_active, self.font);
 
         let tasks_region = render::FRect::new(0.0, hh - 200.0, ww, 200.0);
         let _ = self
