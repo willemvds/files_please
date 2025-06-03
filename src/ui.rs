@@ -6,6 +6,26 @@ use sdl3::pixels;
 use sdl3::render;
 use sdl3::video;
 
+pub struct Theme {
+    active: pixels::Color,
+    inactive: pixels::Color,
+    tasks: pixels::Color,
+    text: pixels::Color,
+    selected: pixels::Color,
+}
+
+impl Theme {
+    pub fn default() -> Theme {
+        Theme {
+            active: pixels::Color::RGB(90, 90, 90),
+            inactive: pixels::Color::RGB(70, 70, 70),
+            tasks: pixels::Color::RGB(45, 200, 155),
+            text: pixels::Color::RGB(22, 255, 44),
+            selected: pixels::Color::RGB(70, 50, 122),
+        }
+    }
+}
+
 pub struct DirectoryView {
     entries: Vec<path::PathBuf>,
     selected_index: Option<usize>,
@@ -48,6 +68,7 @@ impl DirectoryView {
     fn render(
         &self,
         canvas: &mut render::Canvas<video::Window>,
+        theme: &Theme,
         region: render::FRect,
         colour: pixels::Color,
         font: &sdl3::ttf::Font,
@@ -60,7 +81,7 @@ impl DirectoryView {
         for (idx, entry) in self.entries.iter().enumerate() {
             if let Some(selected_index) = self.selected_index {
                 if selected_index == idx {
-                    canvas.set_draw_color(pixels::Color::RGB(70, 50, 122));
+                    canvas.set_draw_color(theme.selected);
                     let _ = canvas.fill_rect(render::FRect::new(
                         region.x,
                         region.y + padding + next + 1.0,
@@ -70,7 +91,7 @@ impl DirectoryView {
                 }
             }
             if let Some(text) = entry.clone().into_os_string().to_str() {
-                let surface = font.render(text).blended(pixels::Color::RGB(22, 255, 44))?;
+                let surface = font.render(text).blended(theme.text)?;
                 let tc = canvas.texture_creator();
                 let tex = tc.create_texture_from_surface(surface)?;
                 let target = render::FRect::new(
@@ -119,6 +140,7 @@ enum Side {
 }
 
 pub struct UI<'ui> {
+    theme: Theme,
     active: Side,
     font: &'ui sdl3::ttf::Font<'ui, 'ui>,
     lhs: DirectoryView,
@@ -129,6 +151,7 @@ pub struct UI<'ui> {
 impl<'ui> UI<'ui> {
     pub fn new(font: &'ui sdl3::ttf::Font) -> UI<'ui> {
         UI {
+            theme: Theme::default(),
             active: Side::Left,
             font: font,
             lhs: DirectoryView::new(),
@@ -170,7 +193,7 @@ impl<'ui> UI<'ui> {
     }
 
     pub fn render(&self, canvas: &mut render::Canvas<video::Window>) {
-        canvas.set_draw_color(pixels::Color::RGB(0, 255, 255));
+        //canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
         canvas.clear();
 
         let (w, h) = canvas.window().size();
@@ -190,19 +213,18 @@ impl<'ui> UI<'ui> {
             Side::Right => active_colour,
             Side::Left => inactive_colour,
         };
-        let _ = self.lhs.render(canvas, left_region, left_colour, self.font);
+        let _ = self
+            .lhs
+            .render(canvas, &self.theme, left_region, left_colour, self.font);
         let right_region = render::FRect::new(ww / 2.0, 0.0, ww / 2.0, hh);
         let _ = self
             .rhs
-            .render(canvas, right_region, right_colour, self.font);
+            .render(canvas, &self.theme, right_region, right_colour, self.font);
 
         let tasks_region = render::FRect::new(0.0, hh - 200.0, ww, 200.0);
-        let _ = self.tv.render(
-            canvas,
-            tasks_region,
-            pixels::Color::RGB(45, 200, 155),
-            self.font,
-        );
+        let _ = self
+            .tv
+            .render(canvas, tasks_region, self.theme.tasks, self.font);
 
         canvas.present();
     }
