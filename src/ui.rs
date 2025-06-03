@@ -193,15 +193,11 @@ impl<'ui> UI<'ui> {
     }
 
     pub fn render(&self, canvas: &mut render::Canvas<video::Window>) {
-        //canvas.set_draw_color(pixels::Color::RGB(0, 0, 0));
         canvas.clear();
 
         let (w, h) = canvas.window().size();
         let ww = w as f32;
         let hh = h as f32;
-
-        let active_colour = pixels::Color::RGB(90, 90, 90);
-        let inactive_colour = pixels::Color::RGB(50, 50, 50);
 
         let left_region = render::FRect::new(0.0, 0.0, ww / 2.0, hh);
         let left_active = match self.active {
