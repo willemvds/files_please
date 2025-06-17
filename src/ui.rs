@@ -287,9 +287,9 @@ impl DirectoryView {
                     canvas.set_draw_color(theme.cursor);
                     let _ = canvas.fill_rect(render::FRect::new(
                         region.x,
-                        region.y + padding + next + 1.0,
+                        region.y + padding + next,
                         region.w,
-                        22.0,
+                        24.0,
                     ));
                 }
             }
@@ -311,9 +311,9 @@ impl DirectoryView {
                     canvas.set_draw_color(theme.selected);
                     let _ = canvas.fill_rect(render::FRect::new(
                         region.x + file_size_width,
-                        region.y + padding + next + 1.0,
+                        region.y + padding + next,
                         select_width,
-                        22.0,
+                        24.0,
                     ));
                 }
 
@@ -345,7 +345,7 @@ impl DirectoryView {
                     region.y + padding + next,
                 );
 
-                next += 20.0;
+                next += 24.0;
             }
         }
 
