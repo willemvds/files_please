@@ -105,6 +105,7 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
     loop {
         for ev in event_pump.poll_iter() {
             match ev {
+                event::Event::Quit { .. } => return Ok(()),
                 event::Event::KeyDown {
                     keycode: Some(keycode),
                     ..
