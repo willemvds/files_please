@@ -307,7 +307,7 @@ impl DirectoryView {
                 //    region.y + padding + next,
                 //);
 
-                if entry.selected {
+                if active && entry.selected {
                     canvas.set_draw_color(theme.selected);
                     let _ = canvas.fill_rect(render::FRect::new(
                         region.x + file_size_width,
