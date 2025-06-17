@@ -143,6 +143,7 @@ impl Theme {
     }
 }
 
+#[derive(PartialEq)]
 enum DirectoryViewEntryKind {
     Dir,
     File,
@@ -239,6 +240,10 @@ impl DirectoryView {
         //let tc = canvas.texture_creator();
         //let tex = tc.create_texture_from_surface(surface)?;
 
+        let icon_width = 20.0;
+        let dir_icon = "\u{f4d3}";
+        let file_icon = " ";
+
         for (idx, entry) in self.entries.iter().enumerate() {
             if let Some(selected_index) = self.selected_index {
                 if active && selected_index == idx {
@@ -251,7 +256,24 @@ impl DirectoryView {
                     ));
                 }
             }
+
             if let Some(text) = entry.name.clone().into_os_string().to_str() {
+                let _ = text_manager.render(
+                    entity_manager,
+                    texture_manager,
+                    canvas,
+                    font,
+                    if entry.kind == DirectoryViewEntryKind::Dir {
+                        dir_icon
+                    } else {
+                        file_icon
+                    },
+                    theme.text,
+                    18,
+                    region.x + padding,
+                    region.y + padding + next,
+                );
+
                 let _ = text_manager.render(
                     entity_manager,
                     texture_manager,
@@ -260,7 +282,7 @@ impl DirectoryView {
                     text,
                     theme.text,
                     18,
-                    region.x + padding,
+                    region.x + icon_width + padding,
                     region.y + padding + next,
                 );
 

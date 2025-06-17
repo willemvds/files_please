@@ -81,21 +81,21 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
     ]);
 
     let mut left = ui::DirectoryView::new(path::PathBuf::from("/home"));
-    left.push_dir(path::PathBuf::from("\u{f4d3} Not"));
+    left.push_dir(path::PathBuf::from("Not"));
     left.push_dir(path::PathBuf::from("Real"));
-    left.push_file(path::PathBuf::from("Yet"));
-    left.push_file(path::PathBuf::from("."));
-    left.push_file(path::PathBuf::from(".."));
-    left.push_file(path::PathBuf::from("..."));
+    left.push_dir(path::PathBuf::from("Yet"));
+    left.push_file(path::PathBuf::from("Rammstein - Heirate Mich.mp3"));
+    left.push_file(path::PathBuf::from("Linkin Park - One Step Closer.mp3"));
+    left.push_file(path::PathBuf::from("Shinedown - Devour.mpv"));
     //gui.left_dir_view(left);
     let mut right = ui::DirectoryView::new(path::PathBuf::from("/root"));
     right.push_dir(path::PathBuf::from("\u{e6ae}"));
     right.push_dir(path::PathBuf::from("\u{e6ae}"));
     right.push_dir(path::PathBuf::from("\u{e6ae}"));
     right.push_dir(path::PathBuf::from("\u{e6ae}"));
-    right.push_file(path::PathBuf::from("\u{e6ae}"));
-    right.push_file(path::PathBuf::from("\u{e6ae}"));
-    right.push_file(path::PathBuf::from("\u{e6ae}"));
+    right.push_file(path::PathBuf::from("toml.toml"));
+    right.push_file(path::PathBuf::from("ini.ni"));
+    right.push_file(path::PathBuf::from("txt.txt"));
     //gui.right_dir_view(right);
 
     //let l2 = left.clone();
