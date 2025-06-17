@@ -362,13 +362,16 @@ impl<'ui> UI<'ui> {
         }
     }
 
-    pub fn left(&mut self) {
-        self.active = Side::Left
+    pub fn toggle_side(&mut self) {
+        match self.active {
+            Side::Left => self.active = Side::Right,
+            Side::Right => self.active = Side::Left,
+        }
     }
 
-    pub fn right(&mut self) {
-        self.active = Side::Right
-    }
+    pub fn next(&mut self) {}
+
+    pub fn prev(&mut self) {}
 
     pub fn render(&mut self, canvas: &mut render::Canvas<video::Window>) {
         canvas.clear();

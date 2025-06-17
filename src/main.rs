@@ -1,8 +1,10 @@
+use std::collections;
 use std::path;
 use std::process;
 use std::thread;
 use std::time;
 
+//mod task;
 mod ui;
 
 extern crate sdl3;
@@ -11,6 +13,15 @@ use sdl3::keyboard;
 
 const EXIT_CODE_OK: u8 = 0;
 const EXIT_CODE_SDL_ERROR: u8 = 1;
+
+enum Action {
+    Up,
+    Down,
+    Next,
+    Prev,
+    ToggleSide,
+    Quit,
+}
 
 fn files_please_gui() -> Result<(), process::ExitCode> {
     let sdl_context = sdl3::init().map_err(|err| {
@@ -60,6 +71,15 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
         process::ExitCode::from(EXIT_CODE_SDL_ERROR)
     })?;
 
+    let keybinds = collections::HashMap::from([
+        (keyboard::Keycode::Up, Action::Up),
+        (keyboard::Keycode::Down, Action::Down),
+        (keyboard::Keycode::Left, Action::Next),
+        (keyboard::Keycode::Right, Action::Prev),
+        (keyboard::Keycode::Tab, Action::ToggleSide),
+        (keyboard::Keycode::Escape, Action::Quit),
+    ]);
+
     let mut left = ui::DirectoryView::new(path::PathBuf::from("/home"));
     left.push_dir(path::PathBuf::from("\u{f4d3} Not"));
     left.push_dir(path::PathBuf::from("Real"));
@@ -85,35 +105,22 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
     loop {
         for ev in event_pump.poll_iter() {
             match ev {
-                event::Event::Quit { .. }
-                | event::Event::KeyDown {
-                    keycode: Some(keyboard::Keycode::Escape),
-                    ..
-                } => return Ok(()),
                 event::Event::KeyDown {
-                    keycode: Some(keyboard::Keycode::Up),
+                    keycode: Some(keycode),
                     ..
                 } => {
-                    gui.up();
-                }
-                event::Event::KeyDown {
-                    keycode: Some(keyboard::Keycode::Down),
-                    ..
-                } => {
-                    gui.down();
-                }
-
-                event::Event::KeyDown {
-                    keycode: Some(keyboard::Keycode::Left),
-                    ..
-                } => {
-                    gui.left();
-                }
-                event::Event::KeyDown {
-                    keycode: Some(keyboard::Keycode::Right),
-                    ..
-                } => {
-                    gui.right();
+                    if let Some(action) = keybinds.get(&keycode) {
+                        match action {
+                            Action::Quit => return Ok(()),
+                            Action::Up => gui.up(),
+                            Action::Down => gui.down(),
+                            Action::Next => gui.next(),
+                            Action::Prev => gui.prev(),
+                            Action::ToggleSide => gui.toggle_side(),
+                            _ => {}
+                        }
+                        //gui.up();
+                    }
                 }
                 _ => {}
             }
