@@ -126,8 +126,13 @@ pub struct Theme {
     inactive: pixels::Color,
     tasks: pixels::Color,
     text: pixels::Color,
-    selected: pixels::Color,
+    cursor: pixels::Color,
     header: pixels::Color,
+    selected: pixels::Color,
+    byte: pixels::Color,
+    kilo: pixels::Color,
+    mega: pixels::Color,
+    giga: pixels::Color,
 }
 
 impl Theme {
@@ -137,8 +142,13 @@ impl Theme {
             inactive: pixels::Color::RGB(70, 70, 70),
             tasks: pixels::Color::RGB(45, 200, 155),
             text: pixels::Color::RGB(22, 255, 44),
-            selected: pixels::Color::RGB(70, 50, 122),
+            cursor: pixels::Color::RGB(70, 50, 122),
             header: pixels::Color::RGB(250, 250, 250),
+            selected: pixels::Color::RGB(250, 120, 0),
+            byte: pixels::Color::RGB(100, 160, 20),
+            kilo: pixels::Color::RGB(140, 160, 20),
+            mega: pixels::Color::RGB(180, 160, 20),
+            giga: pixels::Color::RGB(240, 160, 20),
         }
     }
 }
@@ -150,8 +160,23 @@ enum DirectoryViewEntryKind {
 }
 
 struct DirectoryViewEntry {
+    selected: bool,
     kind: DirectoryViewEntryKind,
     name: path::PathBuf,
+}
+
+impl DirectoryViewEntry {
+    fn new(
+        kind: DirectoryViewEntryKind,
+        name: path::PathBuf,
+        selected: bool,
+    ) -> DirectoryViewEntry {
+        DirectoryViewEntry {
+            kind,
+            name,
+            selected,
+        }
+    }
 }
 
 pub struct DirectoryView {
@@ -170,22 +195,25 @@ impl DirectoryView {
     }
 
     pub fn push_file(&mut self, name: path::PathBuf) {
-        self.entries.push(DirectoryViewEntry {
-            kind: DirectoryViewEntryKind::File,
-            name: name,
-        })
+        self.entries.push(DirectoryViewEntry::new(
+            DirectoryViewEntryKind::File,
+            name,
+            true,
+        ));
+        if self.selected_index.is_none() {
+            self.selected_index = Some(0)
+        }
     }
 
     pub fn push_dir(&mut self, name: path::PathBuf) {
-        self.entries.push(DirectoryViewEntry {
-            kind: DirectoryViewEntryKind::Dir,
-            name: name,
-        })
-    }
+        self.entries.push(DirectoryViewEntry::new(
+            DirectoryViewEntryKind::Dir,
+            name,
+            true,
+        ));
 
-    pub fn select(&mut self, index: usize) {
-        if index < self.entries.len() {
-            self.selected_index = Some(index)
+        if self.selected_index.is_none() {
+            self.selected_index = Some(0)
         }
     }
 
@@ -202,6 +230,13 @@ impl DirectoryView {
             if current + 1 < self.entries.len() {
                 self.selected_index = Some(current + 1)
             }
+        }
+    }
+
+    // TODO(@willemvds): Need to distinguish between select and cursor/hover.
+    pub fn toggle_select(&mut self) {
+        if let Some(current) = self.selected_index {
+            self.entries[current].selected = !self.entries[current].selected;
         }
     }
 
@@ -243,11 +278,13 @@ impl DirectoryView {
         let icon_width = 20.0;
         let dir_icon = "\u{f4d3}";
         let file_icon = " ";
+        let select_width = 4.0;
+        let file_size_width = 0.0;
 
         for (idx, entry) in self.entries.iter().enumerate() {
             if let Some(selected_index) = self.selected_index {
                 if active && selected_index == idx {
-                    canvas.set_draw_color(theme.selected);
+                    canvas.set_draw_color(theme.cursor);
                     let _ = canvas.fill_rect(render::FRect::new(
                         region.x,
                         region.y + padding + next + 1.0,
@@ -258,6 +295,28 @@ impl DirectoryView {
             }
 
             if let Some(text) = entry.name.clone().into_os_string().to_str() {
+                //let _ = text_manager.render(
+                //    entity_manager,
+                //    texture_manager,
+                //    canvas,
+                //    font,
+                //    "4MB",
+                //    theme.giga,
+                //    18,
+                //    region.x + padding + 10.0,
+                //    region.y + padding + next,
+                //);
+
+                if entry.selected {
+                    canvas.set_draw_color(theme.selected);
+                    let _ = canvas.fill_rect(render::FRect::new(
+                        region.x + file_size_width,
+                        region.y + padding + next + 1.0,
+                        select_width,
+                        22.0,
+                    ));
+                }
+
                 let _ = text_manager.render(
                     entity_manager,
                     texture_manager,
@@ -270,7 +329,7 @@ impl DirectoryView {
                     },
                     theme.text,
                     18,
-                    region.x + padding,
+                    region.x + file_size_width + select_width * 2.0 + padding,
                     region.y + padding + next,
                 );
 
@@ -282,7 +341,7 @@ impl DirectoryView {
                     text,
                     theme.text,
                     18,
-                    region.x + icon_width + padding,
+                    region.x + file_size_width + select_width * 2.0 + icon_width + padding,
                     region.y + padding + next,
                 );
 
@@ -345,8 +404,6 @@ impl<'ui> UI<'ui> {
         mut left_dir_view: DirectoryView,
         mut right_dir_view: DirectoryView,
     ) -> UI<'ui> {
-        left_dir_view.select(0);
-        right_dir_view.select(0);
         UI {
             theme: Theme::default(),
             entity_manager: EntityManager::new(),
@@ -362,12 +419,10 @@ impl<'ui> UI<'ui> {
 
     pub fn left_dir_view(&mut self, dv: DirectoryView) {
         self.lhs = dv;
-        self.lhs.select(0);
     }
 
     pub fn right_dir_view(&mut self, dv: DirectoryView) {
         self.rhs = dv;
-        self.rhs.select(0);
     }
 
     pub fn up(&mut self) {
@@ -388,6 +443,13 @@ impl<'ui> UI<'ui> {
         match self.active {
             Side::Left => self.active = Side::Right,
             Side::Right => self.active = Side::Left,
+        }
+    }
+
+    pub fn toggle_select(&mut self) {
+        match self.active {
+            Side::Left => self.lhs.toggle_select(),
+            Side::Right => self.rhs.toggle_select(),
         }
     }
 

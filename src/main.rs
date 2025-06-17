@@ -20,6 +20,7 @@ enum Action {
     Next,
     Prev,
     ToggleSide,
+    ToggleSelect,
     Quit,
 }
 
@@ -77,6 +78,7 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
         (keyboard::Keycode::Left, Action::Next),
         (keyboard::Keycode::Right, Action::Prev),
         (keyboard::Keycode::Tab, Action::ToggleSide),
+        (keyboard::Keycode::Space, Action::ToggleSelect),
         (keyboard::Keycode::Escape, Action::Quit),
     ]);
 
@@ -118,6 +120,7 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                             Action::Next => gui.next(),
                             Action::Prev => gui.prev(),
                             Action::ToggleSide => gui.toggle_side(),
+                            Action::ToggleSelect => gui.toggle_select(),
                             _ => {}
                         }
                         //gui.up();
