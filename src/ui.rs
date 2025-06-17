@@ -1,10 +1,125 @@
+use std::collections;
 use std::error;
 use std::path;
+
+//use crate::task;
 
 extern crate sdl3;
 use sdl3::pixels;
 use sdl3::render;
+use sdl3::surface;
+use sdl3::ttf;
 use sdl3::video;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+struct Entity(u64);
+
+struct EntityManager {
+    next: Entity,
+}
+
+impl EntityManager {
+    fn new() -> EntityManager {
+        EntityManager { next: Entity(1) }
+    }
+
+    fn next(&mut self) -> Entity {
+        let next = self.next;
+        self.next = Entity(self.next.0 + 1);
+        next
+    }
+}
+
+struct TextureManager<'t> {
+    creator: &'static render::TextureCreator<video::WindowContext>,
+    cache: collections::HashMap<Entity, render::Texture<'t>>,
+}
+
+impl<'t> TextureManager<'t> {
+    fn new(creator: &'static render::TextureCreator<video::WindowContext>) -> TextureManager<'t> {
+        TextureManager {
+            creator: creator,
+            cache: collections::HashMap::new(),
+        }
+    }
+
+    fn create_from_surface(
+        &mut self,
+        entity_manager: &mut EntityManager,
+        surface: surface::Surface,
+    ) -> Result<(Entity, &render::Texture<'t>), Box<dyn error::Error>> {
+        let tex = self.creator.create_texture_from_surface(surface)?;
+        let entity = entity_manager.next();
+        self.cache.insert(entity, tex);
+        Ok((entity, self.cache.get(&entity).unwrap()))
+    }
+
+    fn get(&self, tid: Entity) -> Option<&render::Texture<'t>> {
+        self.cache.get(&tid)
+    }
+}
+
+struct TextManager {
+    repo: collections::HashMap<(String, pixels::Color, usize), Entity>,
+}
+
+impl TextManager {
+    fn new() -> TextManager {
+        TextManager {
+            repo: collections::HashMap::new(),
+        }
+    }
+
+    fn get(&self, text: String, colour: pixels::Color, size: usize) -> Option<Entity> {
+        self.repo.get(&(text, colour, size)).copied()
+    }
+
+    fn insert(&mut self, text: String, colour: pixels::Color, size: usize, entity: Entity) {
+        self.repo.insert((text, colour, size), entity);
+    }
+
+    fn render(
+        &mut self,
+        entity_manager: &mut EntityManager,
+        texture_manager: &mut TextureManager,
+        canvas: &mut render::Canvas<video::Window>,
+        font: &ttf::Font,
+        text: &str,
+        colour: pixels::Color,
+        size: usize,
+        x: f32,
+        y: f32,
+    ) -> Result<(), Box<dyn error::Error>> {
+        let tex = {
+            if let Some(entity) = self.get(String::from(text), colour, size) {
+                if let Some(texture) = texture_manager.get(entity) {
+                    texture
+                } else {
+                    eprintln!("Making new texture for text {}", text);
+                    let surface = font.render(text).blended(colour)?;
+                    let (e, texture) = texture_manager
+                        .create_from_surface(entity_manager, surface)
+                        .unwrap();
+                    self.insert(String::from(text), colour, size, e);
+                    texture
+                }
+            } else {
+                eprintln!("Making new texture for text {}", text);
+                let surface = font.render(text).blended(colour)?;
+                let (e, texture) = texture_manager
+                    .create_from_surface(entity_manager, surface)
+                    .unwrap();
+                self.insert(String::from(text), colour, size, e);
+                texture
+            }
+        };
+
+        let target = render::FRect::new(x, y, tex.width() as f32, tex.height() as f32);
+        let _ = canvas.copy(&tex, None, Some(target));
+        Ok(())
+    }
+}
 
 pub struct Theme {
     active: pixels::Color,
@@ -12,6 +127,7 @@ pub struct Theme {
     tasks: pixels::Color,
     text: pixels::Color,
     selected: pixels::Color,
+    header: pixels::Color,
 }
 
 impl Theme {
@@ -22,25 +138,48 @@ impl Theme {
             tasks: pixels::Color::RGB(45, 200, 155),
             text: pixels::Color::RGB(22, 255, 44),
             selected: pixels::Color::RGB(70, 50, 122),
+            header: pixels::Color::RGB(250, 250, 250),
         }
     }
 }
 
+enum DirectoryViewEntryKind {
+    Dir,
+    File,
+}
+
+struct DirectoryViewEntry {
+    kind: DirectoryViewEntryKind,
+    name: path::PathBuf,
+}
+
 pub struct DirectoryView {
-    entries: Vec<path::PathBuf>,
+    dir: path::PathBuf,
+    entries: Vec<DirectoryViewEntry>,
     selected_index: Option<usize>,
 }
 
 impl DirectoryView {
-    pub fn new() -> DirectoryView {
+    pub fn new(abs_path: path::PathBuf) -> DirectoryView {
         DirectoryView {
+            dir: abs_path,
             entries: vec![],
             selected_index: None,
         }
     }
 
-    pub fn push(&mut self, entry: path::PathBuf) {
-        self.entries.push(entry)
+    pub fn push_file(&mut self, name: path::PathBuf) {
+        self.entries.push(DirectoryViewEntry {
+            kind: DirectoryViewEntryKind::File,
+            name: name,
+        })
+    }
+
+    pub fn push_dir(&mut self, name: path::PathBuf) {
+        self.entries.push(DirectoryViewEntry {
+            kind: DirectoryViewEntryKind::Dir,
+            name: name,
+        })
     }
 
     pub fn select(&mut self, index: usize) {
@@ -69,6 +208,9 @@ impl DirectoryView {
         &self,
         canvas: &mut render::Canvas<video::Window>,
         theme: &Theme,
+        entity_manager: &mut EntityManager,
+        text_manager: &mut TextManager,
+        texture_manager: &mut TextureManager,
         region: render::FRect,
         active: bool,
         font: &sdl3::ttf::Font,
@@ -78,6 +220,25 @@ impl DirectoryView {
 
         let padding = 5.0;
         let mut next = 0.0;
+
+        if let Some(text) = self.dir.clone().into_os_string().to_str() {
+            let _ = text_manager.render(
+                entity_manager,
+                texture_manager,
+                canvas,
+                font,
+                text,
+                theme.header,
+                18,
+                region.x + padding,
+                region.y + padding + next,
+            );
+            next += 28.0;
+        };
+        //let surface = font.render(text).blended(theme.header)?;
+        //let tc = canvas.texture_creator();
+        //let tex = tc.create_texture_from_surface(surface)?;
+
         for (idx, entry) in self.entries.iter().enumerate() {
             if let Some(selected_index) = self.selected_index {
                 if active && selected_index == idx {
@@ -90,17 +251,19 @@ impl DirectoryView {
                     ));
                 }
             }
-            if let Some(text) = entry.clone().into_os_string().to_str() {
-                let surface = font.render(text).blended(theme.text)?;
-                let tc = canvas.texture_creator();
-                let tex = tc.create_texture_from_surface(surface)?;
-                let target = render::FRect::new(
+            if let Some(text) = entry.name.clone().into_os_string().to_str() {
+                let _ = text_manager.render(
+                    entity_manager,
+                    texture_manager,
+                    canvas,
+                    font,
+                    text,
+                    theme.text,
+                    18,
                     region.x + padding,
                     region.y + padding + next,
-                    tex.width() as f32,
-                    tex.height() as f32,
                 );
-                let _ = canvas.copy(&tex, None, Some(target));
+
                 next += 20.0;
             }
         }
@@ -109,7 +272,9 @@ impl DirectoryView {
     }
 }
 
-pub struct TaskView {}
+pub struct TaskView {
+    //task: task::Task,
+}
 
 pub struct TasksView {
     tasks: Vec<TaskView>,
@@ -141,6 +306,9 @@ enum Side {
 
 pub struct UI<'ui> {
     theme: Theme,
+    entity_manager: EntityManager,
+    text_manager: TextManager,
+    texture_manager: TextureManager<'ui>,
     active: Side,
     font: &'ui sdl3::ttf::Font<'ui, 'ui>,
     lhs: DirectoryView,
@@ -149,20 +317,30 @@ pub struct UI<'ui> {
 }
 
 impl<'ui> UI<'ui> {
-    pub fn new(font: &'ui sdl3::ttf::Font) -> UI<'ui> {
+    pub fn new(
+        texture_creator: &'static render::TextureCreator<video::WindowContext>,
+        font: &'ui sdl3::ttf::Font,
+        mut left_dir_view: DirectoryView,
+        mut right_dir_view: DirectoryView,
+    ) -> UI<'ui> {
+        left_dir_view.select(0);
+        right_dir_view.select(0);
         UI {
             theme: Theme::default(),
+            entity_manager: EntityManager::new(),
+            text_manager: TextManager::new(),
+            texture_manager: TextureManager::new(texture_creator),
             active: Side::Left,
             font: font,
-            lhs: DirectoryView::new(),
-            rhs: DirectoryView::new(),
+            lhs: left_dir_view,
+            rhs: right_dir_view,
             tv: TasksView::new(),
         }
     }
 
     pub fn left_dir_view(&mut self, dv: DirectoryView) {
         self.lhs = dv;
-        self.lhs.select(1);
+        self.lhs.select(0);
     }
 
     pub fn right_dir_view(&mut self, dv: DirectoryView) {
@@ -192,7 +370,7 @@ impl<'ui> UI<'ui> {
         self.active = Side::Right
     }
 
-    pub fn render(&self, canvas: &mut render::Canvas<video::Window>) {
+    pub fn render(&mut self, canvas: &mut render::Canvas<video::Window>) {
         canvas.clear();
 
         let (w, h) = canvas.window().size();
@@ -209,13 +387,27 @@ impl<'ui> UI<'ui> {
             Side::Left => false,
             Side::Right => true,
         };
-        let _ = self
-            .lhs
-            .render(canvas, &self.theme, left_region, left_active, self.font);
+        let _ = self.lhs.render(
+            canvas,
+            &self.theme,
+            &mut self.entity_manager,
+            &mut self.text_manager,
+            &mut self.texture_manager,
+            left_region,
+            left_active,
+            self.font,
+        );
         let right_region = render::FRect::new(ww / 2.0, 0.0, ww / 2.0, hh);
-        let _ = self
-            .rhs
-            .render(canvas, &self.theme, right_region, right_active, self.font);
+        let _ = self.rhs.render(
+            canvas,
+            &self.theme,
+            &mut self.entity_manager,
+            &mut self.text_manager,
+            &mut self.texture_manager,
+            right_region,
+            right_active,
+            self.font,
+        );
 
         let tasks_region = render::FRect::new(0.0, hh - 200.0, ww, 200.0);
         let _ = self

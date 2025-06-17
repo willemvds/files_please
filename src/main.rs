@@ -3,7 +3,6 @@ use std::process;
 use std::thread;
 use std::time;
 
-mod task;
 mod ui;
 
 extern crate sdl3;
@@ -54,29 +53,34 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
         })?;
 
     let mut canvas = window.into_canvas();
+    let texture_creator = Box::leak(Box::new(canvas.texture_creator()));
+
     let mut event_pump = sdl_context.event_pump().map_err(|err| {
         eprintln!("SDL Event err={}", err);
         process::ExitCode::from(EXIT_CODE_SDL_ERROR)
     })?;
 
-    let mut gui = ui::UI::new(&font);
-    let mut left = ui::DirectoryView::new();
-    left.push(path::PathBuf::from("\u{f4d3} Not"));
-    left.push(path::PathBuf::from("Real"));
-    left.push(path::PathBuf::from("Yet"));
-    left.push(path::PathBuf::from("."));
-    left.push(path::PathBuf::from(".."));
-    left.push(path::PathBuf::from("..."));
-    gui.left_dir_view(left);
-    let mut right = ui::DirectoryView::new();
-    right.push(path::PathBuf::from("\u{e6ae}"));
-    right.push(path::PathBuf::from("\u{e6ae}"));
-    right.push(path::PathBuf::from("\u{e6ae}"));
-    right.push(path::PathBuf::from("\u{e6ae}"));
-    right.push(path::PathBuf::from("\u{e6ae}"));
-    right.push(path::PathBuf::from("\u{e6ae}"));
-    right.push(path::PathBuf::from("\u{e6ae}"));
-    gui.right_dir_view(right);
+    let mut left = ui::DirectoryView::new(path::PathBuf::from("/home"));
+    left.push_dir(path::PathBuf::from("\u{f4d3} Not"));
+    left.push_dir(path::PathBuf::from("Real"));
+    left.push_file(path::PathBuf::from("Yet"));
+    left.push_file(path::PathBuf::from("."));
+    left.push_file(path::PathBuf::from(".."));
+    left.push_file(path::PathBuf::from("..."));
+    //gui.left_dir_view(left);
+    let mut right = ui::DirectoryView::new(path::PathBuf::from("/root"));
+    right.push_dir(path::PathBuf::from("\u{e6ae}"));
+    right.push_dir(path::PathBuf::from("\u{e6ae}"));
+    right.push_dir(path::PathBuf::from("\u{e6ae}"));
+    right.push_dir(path::PathBuf::from("\u{e6ae}"));
+    right.push_file(path::PathBuf::from("\u{e6ae}"));
+    right.push_file(path::PathBuf::from("\u{e6ae}"));
+    right.push_file(path::PathBuf::from("\u{e6ae}"));
+    //gui.right_dir_view(right);
+
+    //let l2 = left.clone();
+
+    let mut gui = ui::UI::new(texture_creator, &font, left, right);
 
     loop {
         for ev in event_pump.poll_iter() {
