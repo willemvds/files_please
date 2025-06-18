@@ -240,6 +240,13 @@ impl DirectoryView {
         }
     }
 
+    pub fn hovered_entry(&self) -> Option<path::PathBuf> {
+        if let Some(current) = self.selected_index {
+            return Some(self.entries[current].name.clone());
+        }
+        None
+    }
+
     fn render(
         &self,
         canvas: &mut render::Canvas<video::Window>,
@@ -417,12 +424,11 @@ impl<'ui> UI<'ui> {
         }
     }
 
-    pub fn left_dir_view(&mut self, dv: DirectoryView) {
-        self.lhs = dv;
-    }
-
-    pub fn right_dir_view(&mut self, dv: DirectoryView) {
-        self.rhs = dv;
+    pub fn update_dir_view(&mut self, dv: DirectoryView) {
+        match self.active {
+            Side::Left => self.lhs = dv,
+            Side::Right => self.rhs = dv,
+        }
     }
 
     pub fn up(&mut self) {
@@ -451,6 +457,22 @@ impl<'ui> UI<'ui> {
             Side::Left => self.lhs.toggle_select(),
             Side::Right => self.rhs.toggle_select(),
         }
+    }
+
+    pub fn active_directory_view(&self) -> &DirectoryView {
+        match self.active {
+            Side::Left => &self.lhs,
+            Side::Right => &self.rhs,
+        }
+    }
+
+    pub fn active_dir_path(&self) -> path::PathBuf {
+        self.active_directory_view().dir.clone()
+    }
+
+    pub fn hovered_entry(&self) -> Option<path::PathBuf> {
+        let dv = self.active_directory_view();
+        dv.hovered_entry()
     }
 
     pub fn next(&mut self) {}

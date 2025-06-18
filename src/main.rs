@@ -1,4 +1,7 @@
 use std::collections;
+use std::env;
+use std::fs;
+use std::io;
 use std::path;
 use std::process;
 use std::thread;
@@ -22,6 +25,28 @@ enum Action {
     ToggleSide,
     ToggleSelect,
     Quit,
+}
+
+fn dir_view_from_path(target_path: &path::Path) -> ui::DirectoryView {
+    let mut dv = ui::DirectoryView::new(target_path.to_path_buf());
+    if let Ok(entries) = fs::read_dir(target_path) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                if let Ok(file_type) = entry.file_type() {
+                    if file_type.is_dir() {
+                        if let Some(entry_name) = entry.path().file_name() {
+                            dv.push_dir(path::PathBuf::from(entry_name))
+                        }
+                    } else if file_type.is_file() {
+                        if let Some(entry_name) = entry.path().file_name() {
+                            dv.push_file(path::PathBuf::from(entry_name))
+                        }
+                    }
+                }
+            }
+        }
+    }
+    dv
 }
 
 fn files_please_gui() -> Result<(), process::ExitCode> {
@@ -75,34 +100,17 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
     let keybinds = collections::HashMap::from([
         (keyboard::Keycode::Up, Action::Up),
         (keyboard::Keycode::Down, Action::Down),
-        (keyboard::Keycode::Left, Action::Next),
-        (keyboard::Keycode::Right, Action::Prev),
+        (keyboard::Keycode::Left, Action::Prev),
+        (keyboard::Keycode::Right, Action::Next),
         (keyboard::Keycode::Tab, Action::ToggleSide),
         (keyboard::Keycode::Space, Action::ToggleSelect),
         (keyboard::Keycode::Escape, Action::Quit),
     ]);
 
-    let mut left = ui::DirectoryView::new(path::PathBuf::from("/home"));
-    left.push_dir(path::PathBuf::from("Not"));
-    left.push_dir(path::PathBuf::from("Real"));
-    left.push_dir(path::PathBuf::from("Yet"));
-    left.push_file(path::PathBuf::from("Rammstein - Heirate Mich.mp3"));
-    left.push_file(path::PathBuf::from("Linkin Park - One Step Closer.mp3"));
-    left.push_file(path::PathBuf::from("Shinedown - Devour.mpv"));
-    //gui.left_dir_view(left);
-    let mut right = ui::DirectoryView::new(path::PathBuf::from("/root"));
-    right.push_dir(path::PathBuf::from("\u{e6ae}"));
-    right.push_dir(path::PathBuf::from("\u{e6ae}"));
-    right.push_dir(path::PathBuf::from("\u{e6ae}"));
-    right.push_dir(path::PathBuf::from("\u{e6ae}"));
-    right.push_file(path::PathBuf::from("toml.toml"));
-    right.push_file(path::PathBuf::from("ini.ni"));
-    right.push_file(path::PathBuf::from("txt.txt"));
-    //gui.right_dir_view(right);
+    let mut dir_path = env::current_dir().unwrap_or(path::PathBuf::from("."));
+    let mut dv = dir_view_from_path(&dir_path);
 
-    //let l2 = left.clone();
-
-    let mut gui = ui::UI::new(texture_creator, &font, left, right);
+    let mut gui = ui::UI::new(texture_creator, &font, dv, dir_view_from_path(&dir_path));
 
     loop {
         for ev in event_pump.poll_iter() {
@@ -117,8 +125,23 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                             Action::Quit => return Ok(()),
                             Action::Up => gui.up(),
                             Action::Down => gui.down(),
-                            Action::Next => gui.next(),
-                            Action::Prev => gui.prev(),
+                            Action::Next => {
+                                if let Some(hovered_entry) = gui.hovered_entry() {
+                                    eprintln!("next on hovered entry {}", hovered_entry.display());
+                                    dir_path = gui.active_dir_path();
+                                    dir_path.push(hovered_entry);
+                                    dv = dir_view_from_path(&dir_path);
+                                    gui.update_dir_view(dv);
+                                }
+                                //gui.next()
+                            }
+                            Action::Prev => {
+                                dir_path = gui.active_dir_path();
+                                dir_path.pop();
+                                dv = dir_view_from_path(&dir_path);
+                                gui.update_dir_view(dv);
+                                //gui.prev()
+                            }
                             Action::ToggleSide => gui.toggle_side(),
                             Action::ToggleSelect => gui.toggle_select(),
                             _ => {}
