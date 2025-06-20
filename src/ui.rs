@@ -198,7 +198,7 @@ impl DirectoryView {
         self.entries.push(DirectoryViewEntry::new(
             DirectoryViewEntryKind::File,
             name,
-            true,
+            false,
         ));
         if self.selected_index.is_none() {
             self.selected_index = Some(0)
@@ -209,7 +209,7 @@ impl DirectoryView {
         self.entries.push(DirectoryViewEntry::new(
             DirectoryViewEntryKind::Dir,
             name,
-            true,
+            false,
         ));
 
         if self.selected_index.is_none() {
