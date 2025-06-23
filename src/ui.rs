@@ -231,6 +231,20 @@ impl DirectoryView {
         }
     }
 
+    pub fn top(&mut self) {
+        if self.entries.len() > 0 {
+            self.selected_index = Some(0);
+            self.scroll_index = 0;
+        }
+    }
+
+    pub fn bottom(&mut self) {
+        if self.entries.len() > 0 {
+            self.selected_index = Some(self.entries.len() - 1);
+            self.down(0);
+        }
+    }
+
     pub fn up(&mut self, distance: usize) {
         if let Some(current) = self.selected_index {
             let delta = if current < distance {
@@ -486,6 +500,20 @@ impl<'ui> UI<'ui> {
         match self.active {
             Side::Left => self.lhs.down(distance),
             Side::Right => self.rhs.down(distance),
+        }
+    }
+
+    pub fn top(&mut self) {
+        match self.active {
+            Side::Left => self.lhs.top(),
+            Side::Right => self.rhs.top(),
+        }
+    }
+
+    pub fn bottom(&mut self) {
+        match self.active {
+            Side::Left => self.lhs.bottom(),
+            Side::Right => self.rhs.bottom(),
         }
     }
 

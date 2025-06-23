@@ -22,6 +22,8 @@ enum Action {
     Down,
     JumpUp,
     JumpDown,
+    Top,
+    Bottom,
     Next,
     Prev,
     ToggleSide,
@@ -102,6 +104,8 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
     let keybinds = collections::HashMap::from([
         (keyboard::Keycode::Up, Action::Up),
         (keyboard::Keycode::Down, Action::Down),
+        (keyboard::Keycode::Home, Action::Top),
+        (keyboard::Keycode::End, Action::Bottom),
         (keyboard::Keycode::PageUp, Action::JumpUp),
         (keyboard::Keycode::PageDown, Action::JumpDown),
         (keyboard::Keycode::Left, Action::Prev),
@@ -129,6 +133,8 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                             Action::Quit => return Ok(()),
                             Action::Up => gui.up(1),
                             Action::Down => gui.down(1),
+                            Action::Top => gui.top(),
+                            Action::Bottom => gui.bottom(),
                             Action::JumpUp => gui.up(10),
                             Action::JumpDown => gui.down(10),
                             Action::Next => {
