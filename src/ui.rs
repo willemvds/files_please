@@ -129,6 +129,7 @@ pub struct Theme {
     cursor: pixels::Color,
     header: pixels::Color,
     selected: pixels::Color,
+    scrollbar: pixels::Color,
     byte: pixels::Color,
     kilo: pixels::Color,
     mega: pixels::Color,
@@ -145,6 +146,7 @@ impl Theme {
             cursor: pixels::Color::RGB(70, 50, 122),
             header: pixels::Color::RGB(250, 250, 250),
             selected: pixels::Color::RGB(250, 120, 0),
+            scrollbar: pixels::Color::RGB(180, 180, 180),
             byte: pixels::Color::RGB(100, 160, 20),
             kilo: pixels::Color::RGB(140, 160, 20),
             mega: pixels::Color::RGB(180, 160, 20),
@@ -194,7 +196,7 @@ impl DirectoryView {
             dir: abs_path,
             entries: vec![],
             draw_region: render::FRect::new(0.0, 0.0, 0.0, 0.0),
-            line_height: 28.0,
+            line_height: 24.0,
             scroll_index: 0,
             selected_index: None,
         }
@@ -273,7 +275,7 @@ impl DirectoryView {
 
             let num_lines = DirectoryView::num_lines(self.draw_region.h, self.line_height);
             if hover_index >= self.scroll_index + num_lines {
-                self.scroll_index = hover_index - num_lines;
+                self.scroll_index = hover_index - num_lines + 1;
             }
         }
     }
@@ -411,6 +413,23 @@ impl DirectoryView {
                 );
 
                 next += 24.0;
+            }
+
+            // scrollbar
+            if self.entries.len() > num_lines {
+                let scrollbar_tick =
+                    (self.draw_region.h - 28.0 - padding) / self.entries.len() as f32;
+                let scrollbar_y = padding + 28.0 + (self.scroll_index as f32 * scrollbar_tick);
+                let scrollbar_height = num_lines as f32 * scrollbar_tick;
+                let scrollbar_width = 5.0;
+
+                canvas.set_draw_color(theme.scrollbar);
+                let _ = canvas.fill_rect(render::FRect::new(
+                    self.draw_region.x + self.draw_region.w - scrollbar_width,
+                    scrollbar_y,
+                    scrollbar_width,
+                    scrollbar_height,
+                ));
             }
         }
 
@@ -558,7 +577,7 @@ impl<'ui> UI<'ui> {
         let ww = w as f32;
         let hh = h as f32;
 
-        let left_region = render::FRect::new(0.0, 0.0, ww / 2.0, hh);
+        let left_region = render::FRect::new(0.0, 0.0, ww / 2.0, hh - 200.0);
         self.lhs.set_draw_region(left_region);
         let left_active = match self.active {
             Side::Left => true,
@@ -578,7 +597,7 @@ impl<'ui> UI<'ui> {
             left_active,
             self.font,
         );
-        let right_region = render::FRect::new(ww / 2.0, 0.0, ww / 2.0, hh);
+        let right_region = render::FRect::new(ww / 2.0, 0.0, ww / 2.0, hh - 200.0);
         self.rhs.set_draw_region(right_region);
         let _ = self.rhs.render(
             canvas,
