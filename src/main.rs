@@ -20,6 +20,8 @@ const EXIT_CODE_SDL_ERROR: u8 = 1;
 enum Action {
     Up,
     Down,
+    JumpUp,
+    JumpDown,
     Next,
     Prev,
     ToggleSide,
@@ -100,6 +102,8 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
     let keybinds = collections::HashMap::from([
         (keyboard::Keycode::Up, Action::Up),
         (keyboard::Keycode::Down, Action::Down),
+        (keyboard::Keycode::PageUp, Action::JumpUp),
+        (keyboard::Keycode::PageDown, Action::JumpDown),
         (keyboard::Keycode::Left, Action::Prev),
         (keyboard::Keycode::Right, Action::Next),
         (keyboard::Keycode::Tab, Action::ToggleSide),
@@ -123,8 +127,10 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                     if let Some(action) = keybinds.get(&keycode) {
                         match action {
                             Action::Quit => return Ok(()),
-                            Action::Up => gui.up(),
-                            Action::Down => gui.down(),
+                            Action::Up => gui.up(1),
+                            Action::Down => gui.down(1),
+                            Action::JumpUp => gui.up(10),
+                            Action::JumpDown => gui.down(10),
                             Action::Next => {
                                 if let Some(hovered_entry) = gui.hovered_entry() {
                                     eprintln!("next on hovered entry {}", hovered_entry.display());

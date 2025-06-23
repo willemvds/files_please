@@ -231,29 +231,35 @@ impl DirectoryView {
         }
     }
 
-    pub fn up(&mut self) {
+    pub fn up(&mut self, distance: usize) {
         if let Some(current) = self.selected_index {
-            if current > 0 {
-                let hover_index = current - 1;
-                self.selected_index = Some(hover_index);
+            let delta = if current < distance {
+                current
+            } else {
+                distance
+            };
+            let hover_index = current - delta;
+            self.selected_index = Some(hover_index);
 
-                if hover_index < self.scroll_index {
-                    self.scroll_index = hover_index;
-                }
+            if hover_index < self.scroll_index {
+                self.scroll_index = hover_index;
             }
         }
     }
 
-    pub fn down(&mut self) {
+    pub fn down(&mut self, distance: usize) {
         if let Some(current) = self.selected_index {
-            if current + 1 < self.entries.len() {
-                let hover_index = current + 1;
-                self.selected_index = Some(hover_index);
+            let delta = if current + distance < self.entries.len() {
+                distance
+            } else {
+                self.entries.len() - current - 1
+            };
+            let hover_index = current + delta;
+            self.selected_index = Some(hover_index);
 
-                let num_lines = DirectoryView::num_lines(self.draw_region.h, self.line_height);
-                if hover_index >= self.scroll_index + num_lines {
-                    self.scroll_index += 1;
-                }
+            let num_lines = DirectoryView::num_lines(self.draw_region.h, self.line_height);
+            if hover_index >= self.scroll_index + num_lines {
+                self.scroll_index = hover_index - num_lines;
             }
         }
     }
@@ -469,17 +475,17 @@ impl<'ui> UI<'ui> {
         }
     }
 
-    pub fn up(&mut self) {
+    pub fn up(&mut self, distance: usize) {
         match self.active {
-            Side::Left => self.lhs.up(),
-            Side::Right => self.rhs.up(),
+            Side::Left => self.lhs.up(distance),
+            Side::Right => self.rhs.up(distance),
         }
     }
 
-    pub fn down(&mut self) {
+    pub fn down(&mut self, distance: usize) {
         match self.active {
-            Side::Left => self.lhs.down(),
-            Side::Right => self.rhs.down(),
+            Side::Left => self.lhs.down(distance),
+            Side::Right => self.rhs.down(distance),
         }
     }
 
