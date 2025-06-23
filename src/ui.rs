@@ -416,7 +416,7 @@ impl DirectoryView {
             }
 
             // scrollbar
-            if self.entries.len() > num_lines {
+            if active && self.entries.len() > num_lines {
                 let scrollbar_tick =
                     (self.draw_region.h - 28.0 - padding) / self.entries.len() as f32;
                 let scrollbar_y = padding + 28.0 + (self.scroll_index as f32 * scrollbar_tick);
