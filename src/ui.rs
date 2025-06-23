@@ -293,7 +293,7 @@ impl DirectoryView {
     }
 
     fn render(
-        &mut self,
+        &self,
         canvas: &mut render::Canvas<video::Window>,
         theme: &Theme,
         entity_manager: &mut EntityManager,
