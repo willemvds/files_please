@@ -182,6 +182,9 @@ impl DirectoryViewEntry {
 pub struct DirectoryView {
     dir: path::PathBuf,
     entries: Vec<DirectoryViewEntry>,
+    draw_region: render::FRect,
+    line_height: f32,
+    scroll_index: usize,
     selected_index: Option<usize>,
 }
 
@@ -190,8 +193,19 @@ impl DirectoryView {
         DirectoryView {
             dir: abs_path,
             entries: vec![],
+            draw_region: render::FRect::new(0.0, 0.0, 0.0, 0.0),
+            line_height: 28.0,
+            scroll_index: 0,
             selected_index: None,
         }
+    }
+
+    fn num_lines(view_height: f32, line_height: f32) -> usize {
+        ((view_height - (2.0 * line_height)) / line_height).round() as usize
+    }
+
+    pub fn set_draw_region(&mut self, region: render::FRect) {
+        self.draw_region = region;
     }
 
     pub fn push_file(&mut self, name: path::PathBuf) {
@@ -220,7 +234,12 @@ impl DirectoryView {
     pub fn up(&mut self) {
         if let Some(current) = self.selected_index {
             if current > 0 {
-                self.selected_index = Some(current - 1)
+                let hover_index = current - 1;
+                self.selected_index = Some(hover_index);
+
+                if hover_index < self.scroll_index {
+                    self.scroll_index = hover_index;
+                }
             }
         }
     }
@@ -228,7 +247,13 @@ impl DirectoryView {
     pub fn down(&mut self) {
         if let Some(current) = self.selected_index {
             if current + 1 < self.entries.len() {
-                self.selected_index = Some(current + 1)
+                let hover_index = current + 1;
+                self.selected_index = Some(hover_index);
+
+                let num_lines = DirectoryView::num_lines(self.draw_region.h, self.line_height);
+                if hover_index >= self.scroll_index + num_lines {
+                    self.scroll_index += 1;
+                }
             }
         }
     }
@@ -248,18 +273,25 @@ impl DirectoryView {
     }
 
     fn render(
-        &self,
+        &mut self,
         canvas: &mut render::Canvas<video::Window>,
         theme: &Theme,
         entity_manager: &mut EntityManager,
         text_manager: &mut TextManager,
         texture_manager: &mut TextureManager,
-        region: render::FRect,
         active: bool,
         font: &sdl3::ttf::Font,
     ) -> Result<(), Box<dyn error::Error>> {
         canvas.set_draw_color(if active { theme.active } else { theme.inactive });
-        let _ = canvas.fill_rect(region);
+        let _ = canvas.fill_rect(self.draw_region);
+
+        let num_lines = DirectoryView::num_lines(self.draw_region.h, self.line_height);
+
+        let first = self.scroll_index;
+        let mut last = first + num_lines + 1;
+        if last > self.entries.len() {
+            last = self.entries.len()
+        }
 
         let padding = 5.0;
         let mut next = 0.0;
@@ -273,8 +305,8 @@ impl DirectoryView {
                 text,
                 theme.header,
                 18,
-                region.x + padding,
-                region.y + padding + next,
+                self.draw_region.x + padding,
+                self.draw_region.y + padding + next,
             );
             next += 28.0;
         };
@@ -288,14 +320,16 @@ impl DirectoryView {
         let select_width = 4.0;
         let file_size_width = 0.0;
 
-        for (idx, entry) in self.entries.iter().enumerate() {
+        for idx in first..last {
+            let entry = &self.entries[idx];
+
             if let Some(selected_index) = self.selected_index {
                 if active && selected_index == idx {
                     canvas.set_draw_color(theme.cursor);
                     let _ = canvas.fill_rect(render::FRect::new(
-                        region.x,
-                        region.y + padding + next,
-                        region.w,
+                        self.draw_region.x,
+                        self.draw_region.y + padding + next,
+                        self.draw_region.w,
                         24.0,
                     ));
                 }
@@ -317,8 +351,8 @@ impl DirectoryView {
                 if active && entry.selected {
                     canvas.set_draw_color(theme.selected);
                     let _ = canvas.fill_rect(render::FRect::new(
-                        region.x + file_size_width,
-                        region.y + padding + next,
+                        self.draw_region.x + file_size_width,
+                        self.draw_region.y + padding + next,
                         select_width,
                         24.0,
                     ));
@@ -336,8 +370,8 @@ impl DirectoryView {
                     },
                     theme.text,
                     18,
-                    region.x + file_size_width + select_width * 2.0 + padding,
-                    region.y + padding + next,
+                    self.draw_region.x + file_size_width + select_width * 2.0 + padding,
+                    self.draw_region.y + padding + next,
                 );
 
                 let _ = text_manager.render(
@@ -348,8 +382,12 @@ impl DirectoryView {
                     text,
                     theme.text,
                     18,
-                    region.x + file_size_width + select_width * 2.0 + icon_width + padding,
-                    region.y + padding + next,
+                    self.draw_region.x
+                        + file_size_width
+                        + select_width * 2.0
+                        + icon_width
+                        + padding,
+                    self.draw_region.y + padding + next,
                 );
 
                 next += 24.0;
@@ -487,6 +525,7 @@ impl<'ui> UI<'ui> {
         let hh = h as f32;
 
         let left_region = render::FRect::new(0.0, 0.0, ww / 2.0, hh);
+        self.lhs.set_draw_region(left_region);
         let left_active = match self.active {
             Side::Left => true,
             Side::Right => false,
@@ -502,18 +541,17 @@ impl<'ui> UI<'ui> {
             &mut self.entity_manager,
             &mut self.text_manager,
             &mut self.texture_manager,
-            left_region,
             left_active,
             self.font,
         );
         let right_region = render::FRect::new(ww / 2.0, 0.0, ww / 2.0, hh);
+        self.rhs.set_draw_region(right_region);
         let _ = self.rhs.render(
             canvas,
             &self.theme,
             &mut self.entity_manager,
             &mut self.text_manager,
             &mut self.texture_manager,
-            right_region,
             right_active,
             self.font,
         );
