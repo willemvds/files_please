@@ -1,13 +1,13 @@
 use std::collections;
 use std::env;
 use std::fs;
-use std::io;
 use std::path;
 use std::process;
 use std::thread;
 use std::time;
 
 //mod task;
+mod directory;
 mod ui;
 
 extern crate sdl3;
@@ -29,28 +29,6 @@ enum Action {
     ToggleSide,
     ToggleSelect,
     Quit,
-}
-
-fn dir_view_from_path(target_path: &path::Path) -> ui::DirectoryView {
-    let mut dv = ui::DirectoryView::new(target_path.to_path_buf());
-    if let Ok(entries) = fs::read_dir(target_path) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                if let Ok(file_type) = entry.file_type() {
-                    if file_type.is_dir() {
-                        if let Some(entry_name) = entry.path().file_name() {
-                            dv.push_dir(path::PathBuf::from(entry_name))
-                        }
-                    } else if file_type.is_file() {
-                        if let Some(entry_name) = entry.path().file_name() {
-                            dv.push_file(path::PathBuf::from(entry_name))
-                        }
-                    }
-                }
-            }
-        }
-    }
-    dv
 }
 
 fn files_please_gui() -> Result<(), process::ExitCode> {
@@ -116,9 +94,14 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
     ]);
 
     let mut dir_path = env::current_dir().unwrap_or(path::PathBuf::from("."));
-    let mut dv = dir_view_from_path(&dir_path);
 
-    let mut gui = ui::UI::new(texture_creator, &font, dv, dir_view_from_path(&dir_path));
+    let read_dir_it = fs::read_dir(&dir_path).map_err(|err| {
+        eprintln!("Failed to read current working directory {}", err);
+        process::ExitCode::from(2)
+    })?;
+    let de = directory::Entries::new(dir_path.clone(), read_dir_it);
+
+    let mut gui = ui::UI::new(texture_creator, &font, de.clone(), de.clone());
 
     loop {
         for ev in event_pump.poll_iter() {
@@ -142,16 +125,22 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                                     eprintln!("next on hovered entry {}", hovered_entry.display());
                                     dir_path = gui.active_dir_path();
                                     dir_path.push(hovered_entry);
-                                    dv = dir_view_from_path(&dir_path);
-                                    gui.update_dir_view(dv);
+
+                                    if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
+                                        let de =
+                                            directory::Entries::new(dir_path.clone(), read_dir_it);
+                                        gui.update_dir_view(de);
+                                    }
                                 }
                                 //gui.next()
                             }
                             Action::Prev => {
                                 dir_path = gui.active_dir_path();
                                 dir_path.pop();
-                                dv = dir_view_from_path(&dir_path);
-                                gui.update_dir_view(dv);
+                                if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
+                                    let de = directory::Entries::new(dir_path.clone(), read_dir_it);
+                                    gui.update_dir_view(de);
+                                }
                                 //gui.prev()
                             }
                             Action::ToggleSide => gui.toggle_side(),

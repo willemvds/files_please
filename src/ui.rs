@@ -1,8 +1,10 @@
 use std::collections;
 use std::error;
+use std::fs;
 use std::path;
 
 //use crate::task;
+use crate::directory;
 
 extern crate sdl3;
 use sdl3::pixels;
@@ -156,27 +158,37 @@ impl Theme {
 }
 
 #[derive(PartialEq)]
-enum DirectoryViewEntryKind {
+enum DirectoryEntryKind {
     Dir,
     File,
 }
 
-struct DirectoryViewEntry {
-    selected: bool,
-    kind: DirectoryViewEntryKind,
+pub struct DirectoryEntry {
+    kind: DirectoryEntryKind,
     name: path::PathBuf,
 }
 
-impl DirectoryViewEntry {
-    fn new(
-        kind: DirectoryViewEntryKind,
-        name: path::PathBuf,
-        selected: bool,
-    ) -> DirectoryViewEntry {
+impl DirectoryEntry {
+    pub fn new(kind: DirectoryEntryKind, name: path::PathBuf) -> DirectoryEntry {
+        DirectoryEntry {
+            kind: kind,
+            name: name,
+        }
+    }
+}
+
+pub struct DirectoryViewEntry {
+    entry: DirectoryEntry,
+    selected: bool,
+    //    kind: DirectoryViewEntryKind,
+    //    name: path::PathBuf,
+}
+
+impl From<DirectoryEntry> for DirectoryViewEntry {
+    fn from(de: DirectoryEntry) -> Self {
         DirectoryViewEntry {
-            kind,
-            name,
-            selected,
+            entry: de,
+            selected: false,
         }
     }
 }
@@ -188,6 +200,20 @@ pub struct DirectoryView {
     line_height: f32,
     scroll_index: usize,
     selected_index: Option<usize>,
+}
+
+impl From<directory::Entries> for DirectoryView {
+    fn from(de: directory::Entries) -> DirectoryView {
+        let mut dv = DirectoryView::new(de.absolute_path);
+        for entry in de.entries.iter() {
+            match entry.kind {
+                directory::EntryKind::Dir => dv.push_dir(entry.name.clone()),
+                directory::EntryKind::File => dv.push_file(entry.name.clone()),
+            }
+        }
+
+        dv
+    }
 }
 
 impl DirectoryView {
@@ -211,23 +237,22 @@ impl DirectoryView {
     }
 
     pub fn push_file(&mut self, name: path::PathBuf) {
-        self.entries.push(DirectoryViewEntry::new(
-            DirectoryViewEntryKind::File,
-            name,
-            false,
-        ));
+        self.entries
+            .push(DirectoryViewEntry::from(DirectoryEntry::new(
+                DirectoryEntryKind::File,
+                name,
+            )));
         if self.selected_index.is_none() {
             self.selected_index = Some(0)
         }
     }
 
     pub fn push_dir(&mut self, name: path::PathBuf) {
-        self.entries.push(DirectoryViewEntry::new(
-            DirectoryViewEntryKind::Dir,
-            name,
-            false,
-        ));
-
+        self.entries
+            .push(DirectoryViewEntry::from(DirectoryEntry::new(
+                DirectoryEntryKind::Dir,
+                name,
+            )));
         if self.selected_index.is_none() {
             self.selected_index = Some(0)
         }
@@ -289,7 +314,7 @@ impl DirectoryView {
 
     pub fn hovered_entry(&self) -> Option<path::PathBuf> {
         if let Some(current) = self.selected_index {
-            return Some(self.entries[current].name.clone());
+            return Some(self.entries[current].entry.name.clone());
         }
         None
     }
@@ -357,7 +382,7 @@ impl DirectoryView {
                 }
             }
 
-            if let Some(text) = entry.name.clone().into_os_string().to_str() {
+            if let Some(text) = entry.entry.name.clone().into_os_string().to_str() {
                 //let _ = text_manager.render(
                 //    entity_manager,
                 //    texture_manager,
@@ -385,7 +410,7 @@ impl DirectoryView {
                     texture_manager,
                     canvas,
                     font,
-                    if entry.kind == DirectoryViewEntryKind::Dir {
+                    if entry.entry.kind == DirectoryEntryKind::Dir {
                         dir_icon
                     } else {
                         file_icon
@@ -485,8 +510,8 @@ impl<'ui> UI<'ui> {
     pub fn new(
         texture_creator: &'static render::TextureCreator<video::WindowContext>,
         font: &'ui sdl3::ttf::Font,
-        mut left_dir_view: DirectoryView,
-        mut right_dir_view: DirectoryView,
+        left_entries: directory::Entries,
+        right_entries: directory::Entries,
     ) -> UI<'ui> {
         UI {
             theme: Theme::default(),
@@ -495,16 +520,16 @@ impl<'ui> UI<'ui> {
             texture_manager: TextureManager::new(texture_creator),
             active: Side::Left,
             font: font,
-            lhs: left_dir_view,
-            rhs: right_dir_view,
+            lhs: DirectoryView::from(left_entries),
+            rhs: DirectoryView::from(right_entries),
             tv: TasksView::new(),
         }
     }
 
-    pub fn update_dir_view(&mut self, dv: DirectoryView) {
+    pub fn update_dir_view(&mut self, de: directory::Entries) {
         match self.active {
-            Side::Left => self.lhs = dv,
-            Side::Right => self.rhs = dv,
+            Side::Left => self.lhs = DirectoryView::from(de),
+            Side::Right => self.rhs = DirectoryView::from(de),
         }
     }
 
