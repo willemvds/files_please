@@ -122,26 +122,29 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                             Action::JumpDown => gui.down(10),
                             Action::Next => {
                                 if let Some(hovered_entry) = gui.hovered_entry() {
-                                    eprintln!("next on hovered entry {}", hovered_entry.display());
+                                    eprintln!(
+                                        "next on hovered entry {}",
+                                        hovered_entry.name.display()
+                                    );
                                     dir_path = gui.active_dir_path();
-                                    dir_path.push(hovered_entry);
+                                    dir_path.push(hovered_entry.name);
 
                                     if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
                                         let de =
                                             directory::Entries::new(dir_path.clone(), read_dir_it);
-                                        gui.update_dir_view(de);
+                                        gui.update_dir_entries(de);
                                     }
                                 }
-                                //gui.next()
+                                gui.show_dir(dir_path.clone());
                             }
                             Action::Prev => {
                                 dir_path = gui.active_dir_path();
                                 dir_path.pop();
                                 if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
                                     let de = directory::Entries::new(dir_path.clone(), read_dir_it);
-                                    gui.update_dir_view(de);
+                                    gui.update_dir_entries(de);
                                 }
-                                //gui.prev()
+                                gui.show_dir(dir_path.clone());
                             }
                             Action::ToggleSide => gui.toggle_side(),
                             Action::ToggleSelect => gui.toggle_select(),

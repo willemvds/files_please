@@ -1,6 +1,7 @@
 use std::collections;
 use std::error;
 use std::fs;
+use std::mem;
 use std::path;
 
 //use crate::task;
@@ -98,7 +99,7 @@ impl TextManager {
                 if let Some(texture) = texture_manager.get(entity) {
                     texture
                 } else {
-                    eprintln!("Making new texture for text {}", text);
+                    //eprintln!("Making new texture for text {}", text);
                     let surface = font.render(text).blended(colour)?;
                     let (e, texture) = texture_manager
                         .create_from_surface(entity_manager, surface)
@@ -107,7 +108,7 @@ impl TextManager {
                     texture
                 }
             } else {
-                eprintln!("Making new texture for text {}", text);
+                //eprintln!("Making new texture for text {}", text);
                 let surface = font.render(text).blended(colour)?;
                 let (e, texture) = texture_manager
                     .create_from_surface(entity_manager, surface)
@@ -157,40 +158,9 @@ impl Theme {
     }
 }
 
-#[derive(PartialEq)]
-enum DirectoryEntryKind {
-    Dir,
-    File,
-}
-
-pub struct DirectoryEntry {
-    kind: DirectoryEntryKind,
-    name: path::PathBuf,
-}
-
-impl DirectoryEntry {
-    pub fn new(kind: DirectoryEntryKind, name: path::PathBuf) -> DirectoryEntry {
-        DirectoryEntry {
-            kind: kind,
-            name: name,
-        }
-    }
-}
-
 pub struct DirectoryViewEntry {
-    entry: DirectoryEntry,
+    entry: directory::Entry,
     selected: bool,
-    //    kind: DirectoryViewEntryKind,
-    //    name: path::PathBuf,
-}
-
-impl From<DirectoryEntry> for DirectoryViewEntry {
-    fn from(de: DirectoryEntry) -> Self {
-        DirectoryViewEntry {
-            entry: de,
-            selected: false,
-        }
-    }
 }
 
 pub struct DirectoryView {
@@ -202,14 +172,18 @@ pub struct DirectoryView {
     selected_index: Option<usize>,
 }
 
-impl From<directory::Entries> for DirectoryView {
-    fn from(de: directory::Entries) -> DirectoryView {
-        let mut dv = DirectoryView::new(de.absolute_path);
+impl From<&directory::Entries> for DirectoryView {
+    fn from(de: &directory::Entries) -> DirectoryView {
+        let mut dv = DirectoryView::new(de.absolute_path.clone());
         for entry in de.entries.iter() {
-            match entry.kind {
-                directory::EntryKind::Dir => dv.push_dir(entry.name.clone()),
-                directory::EntryKind::File => dv.push_file(entry.name.clone()),
-            }
+            dv.entries.push(DirectoryViewEntry {
+                entry: entry.clone(),
+                selected: false,
+            });
+        }
+
+        if dv.entries.len() > 0 {
+            dv.selected_index = Some(0);
         }
 
         dv
@@ -234,28 +208,6 @@ impl DirectoryView {
 
     pub fn set_draw_region(&mut self, region: render::FRect) {
         self.draw_region = region;
-    }
-
-    pub fn push_file(&mut self, name: path::PathBuf) {
-        self.entries
-            .push(DirectoryViewEntry::from(DirectoryEntry::new(
-                DirectoryEntryKind::File,
-                name,
-            )));
-        if self.selected_index.is_none() {
-            self.selected_index = Some(0)
-        }
-    }
-
-    pub fn push_dir(&mut self, name: path::PathBuf) {
-        self.entries
-            .push(DirectoryViewEntry::from(DirectoryEntry::new(
-                DirectoryEntryKind::Dir,
-                name,
-            )));
-        if self.selected_index.is_none() {
-            self.selected_index = Some(0)
-        }
     }
 
     pub fn top(&mut self) {
@@ -312,9 +264,9 @@ impl DirectoryView {
         }
     }
 
-    pub fn hovered_entry(&self) -> Option<path::PathBuf> {
+    pub fn hovered_entry(&self) -> Option<directory::Entry> {
         if let Some(current) = self.selected_index {
-            return Some(self.entries[current].entry.name.clone());
+            return Some(self.entries[current].entry.clone());
         }
         None
     }
@@ -410,7 +362,7 @@ impl DirectoryView {
                     texture_manager,
                     canvas,
                     font,
-                    if entry.entry.kind == DirectoryEntryKind::Dir {
+                    if entry.entry.kind == directory::EntryKind::Dir {
                         dir_icon
                     } else {
                         file_icon
@@ -494,7 +446,14 @@ enum Side {
     Right,
 }
 
+enum DirectoryViewState {
+    Active,
+    Inactive(DirectoryView),
+}
+
 pub struct UI<'ui> {
+    left_directory_views: collections::HashMap<path::PathBuf, DirectoryViewState>,
+    right_directory_views: collections::HashMap<path::PathBuf, DirectoryViewState>,
     theme: Theme,
     entity_manager: EntityManager,
     text_manager: TextManager,
@@ -513,24 +472,38 @@ impl<'ui> UI<'ui> {
         left_entries: directory::Entries,
         right_entries: directory::Entries,
     ) -> UI<'ui> {
+        let mut left_directory_views = collections::HashMap::new();
+        left_directory_views.insert(
+            left_entries.absolute_path.clone(),
+            DirectoryViewState::Active,
+        );
+        let mut right_directory_views = collections::HashMap::new();
+        right_directory_views.insert(
+            right_entries.absolute_path.clone(),
+            DirectoryViewState::Active,
+        );
+
         UI {
+            left_directory_views: left_directory_views,
+            right_directory_views: right_directory_views,
             theme: Theme::default(),
             entity_manager: EntityManager::new(),
             text_manager: TextManager::new(),
             texture_manager: TextureManager::new(texture_creator),
             active: Side::Left,
             font: font,
-            lhs: DirectoryView::from(left_entries),
-            rhs: DirectoryView::from(right_entries),
+            lhs: DirectoryView::from(&left_entries),
+            rhs: DirectoryView::from(&right_entries),
             tv: TasksView::new(),
         }
     }
 
-    pub fn update_dir_view(&mut self, de: directory::Entries) {
-        match self.active {
-            Side::Left => self.lhs = DirectoryView::from(de),
-            Side::Right => self.rhs = DirectoryView::from(de),
-        }
+    pub fn update_dir_entries(&mut self, de: directory::Entries) {
+        let left_e = self.left_directory_views.entry(de.absolute_path.clone());
+        left_e.or_insert(DirectoryViewState::Inactive(DirectoryView::from(&de)));
+
+        let right_e = self.right_directory_views.entry(de.absolute_path.clone());
+        right_e.or_insert(DirectoryViewState::Inactive(DirectoryView::from(&de)));
     }
 
     pub fn up(&mut self, distance: usize) {
@@ -586,9 +559,51 @@ impl<'ui> UI<'ui> {
         self.active_directory_view().dir.clone()
     }
 
-    pub fn hovered_entry(&self) -> Option<path::PathBuf> {
+    pub fn hovered_entry(&self) -> Option<directory::Entry> {
         let dv = self.active_directory_view();
         dv.hovered_entry()
+    }
+
+    pub fn show_dir(&mut self, abs_path: path::PathBuf) {
+        let side_directory_views = match self.active {
+            Side::Left => &mut self.left_directory_views,
+            Side::Right => &mut self.right_directory_views,
+        };
+        let side = match self.active {
+            Side::Left => &mut self.lhs,
+            Side::Right => &mut self.rhs,
+        };
+        if let Some(dvs) = side_directory_views.get(&abs_path) {
+            match dvs {
+                DirectoryViewState::Active => {
+                    // this means we received new dir entries for the currently shown dv
+                    eprintln!("Active? for {}", abs_path.display());
+                }
+                DirectoryViewState::Inactive(_) => {
+                    eprintln!("Inactive? for {}", abs_path.display());
+                    if let Some(prev) = side_directory_views.remove(&abs_path) {
+                        side_directory_views.insert(abs_path.clone(), DirectoryViewState::Active);
+                        match prev {
+                            DirectoryViewState::Inactive(active_dv) => {
+                                let old_dv = mem::replace(side, active_dv);
+                                side_directory_views.insert(
+                                    old_dv.dir.clone(),
+                                    DirectoryViewState::Inactive(old_dv),
+                                );
+                            }
+                            _ => {
+                                eprintln!("This should not happen ....");
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            eprintln!(
+                "Trying to show dir without entries...{}",
+                abs_path.display()
+            );
+        }
     }
 
     pub fn next(&mut self) {}
