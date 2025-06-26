@@ -1,5 +1,6 @@
 use std::collections;
 use std::env;
+use std::ffi;
 use std::fs;
 use std::path;
 use std::process;
@@ -135,16 +136,19 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                                         gui.update_dir_entries(de);
                                     }
                                 }
-                                gui.show_dir(dir_path.clone());
+                                gui.show_dir(dir_path.clone(), path::PathBuf::from(""));
                             }
                             Action::Prev => {
                                 dir_path = gui.active_dir_path();
+                                let from_name = path::PathBuf::from(
+                                    dir_path.file_name().unwrap_or(ffi::OsStr::new("")),
+                                );
                                 dir_path.pop();
                                 if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
                                     let de = directory::Entries::new(dir_path.clone(), read_dir_it);
                                     gui.update_dir_entries(de);
                                 }
-                                gui.show_dir(dir_path.clone());
+                                gui.show_dir(dir_path.clone(), from_name);
                             }
                             Action::ToggleSide => gui.toggle_side(),
                             Action::ToggleSelect => gui.toggle_select(),

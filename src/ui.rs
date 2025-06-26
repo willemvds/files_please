@@ -182,10 +182,6 @@ impl From<&directory::Entries> for DirectoryView {
             });
         }
 
-        if dv.entries.len() > 0 {
-            dv.selected_index = Some(0);
-        }
-
         dv
     }
 }
@@ -483,7 +479,7 @@ impl<'ui> UI<'ui> {
             DirectoryViewState::Active,
         );
 
-        UI {
+        let mut ui = UI {
             left_directory_views: left_directory_views,
             right_directory_views: right_directory_views,
             theme: Theme::default(),
@@ -495,7 +491,10 @@ impl<'ui> UI<'ui> {
             lhs: DirectoryView::from(&left_entries),
             rhs: DirectoryView::from(&right_entries),
             tv: TasksView::new(),
-        }
+        };
+        ui.lhs.selected_index = Some(0);
+        ui.rhs.selected_index = Some(0);
+        ui
     }
 
     pub fn update_dir_entries(&mut self, de: directory::Entries) {
@@ -564,7 +563,7 @@ impl<'ui> UI<'ui> {
         dv.hovered_entry()
     }
 
-    pub fn show_dir(&mut self, abs_path: path::PathBuf) {
+    pub fn show_dir(&mut self, abs_path: path::PathBuf, selected_entry: path::PathBuf) {
         let side_directory_views = match self.active {
             Side::Left => &mut self.left_directory_views,
             Side::Right => &mut self.right_directory_views,
@@ -585,7 +584,21 @@ impl<'ui> UI<'ui> {
                         side_directory_views.insert(abs_path.clone(), DirectoryViewState::Active);
                         match prev {
                             DirectoryViewState::Inactive(active_dv) => {
+                                let mut selected_index = active_dv.selected_index;
+                                if active_dv.selected_index.is_none() {
+                                    for (idx, entry) in active_dv.entries.iter().enumerate() {
+                                        if entry.entry.name == selected_entry {
+                                            selected_index = Some(idx);
+                                            break;
+                                        }
+                                    }
+                                }
+                                if selected_index.is_none() && side.entries.len() > 0 {
+                                    selected_index = Some(0)
+                                }
+
                                 let old_dv = mem::replace(side, active_dv);
+                                side.selected_index = selected_index;
                                 side_directory_views.insert(
                                     old_dv.dir.clone(),
                                     DirectoryViewState::Inactive(old_dv),
