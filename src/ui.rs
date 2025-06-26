@@ -593,7 +593,7 @@ impl<'ui> UI<'ui> {
                                         }
                                     }
                                 }
-                                if selected_index.is_none() && side.entries.len() > 0 {
+                                if selected_index.is_none() && active_dv.entries.len() > 0 {
                                     selected_index = Some(0)
                                 }
 
