@@ -168,9 +168,7 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                             }
                             Action::ToggleSide => gui.toggle_side(),
                             Action::ToggleSelect => gui.toggle_select(),
-                            _ => {}
                         }
-                        //gui.up();
                     }
                 }
                 _ => {}

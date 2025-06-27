@@ -1,6 +1,5 @@
 use std::collections;
 use std::error;
-use std::fs;
 use std::mem;
 use std::path;
 
