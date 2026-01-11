@@ -14,4 +14,3 @@ Files, Please!
 - 1x IO worker (virtual) per physical device.
 - File preview.
 - Archiving features.
-- Non-linux platform support (likely macOS and Windows).
