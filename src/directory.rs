@@ -1,4 +1,5 @@
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path;
 
 #[derive(Clone, PartialEq)]
@@ -11,13 +12,15 @@ pub enum EntryKind {
 pub struct Entry {
     pub kind: EntryKind,
     pub name: path::PathBuf,
+    pub inode: u64,
 }
 
 impl Entry {
-    pub fn new(kind: EntryKind, name: path::PathBuf) -> Entry {
+    pub fn new(kind: EntryKind, name: path::PathBuf, inode: u64) -> Entry {
         Entry {
             kind: kind,
             name: name,
+            inode: inode,
         }
     }
 }
@@ -40,15 +43,23 @@ impl Entries {
                 if let Ok(file_type) = entry.file_type() {
                     if file_type.is_dir() {
                         if let Some(entry_name) = entry.path().file_name() {
-                            entries
-                                .entries
-                                .push(Entry::new(EntryKind::Dir, path::PathBuf::from(entry_name)));
+                            if let Ok(metadata) = entry.metadata() {
+                                entries.entries.push(Entry::new(
+                                    EntryKind::Dir,
+                                    path::PathBuf::from(entry_name),
+                                    metadata.ino(),
+                                ));
+                            }
                         }
                     } else if file_type.is_file() {
                         if let Some(entry_name) = entry.path().file_name() {
-                            entries
-                                .entries
-                                .push(Entry::new(EntryKind::File, path::PathBuf::from(entry_name)));
+                            if let Ok(metadata) = entry.metadata() {
+                                entries.entries.push(Entry::new(
+                                    EntryKind::File,
+                                    path::PathBuf::from(entry_name),
+                                    metadata.ino(),
+                                ));
+                            }
                         }
                     } else {
                         if let Some(entry_name) = entry.path().file_name() {

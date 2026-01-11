@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 sdl3 = { version = "0", features = ["image", "ttf"] }
+uuidv7 = "0.1.7"
 

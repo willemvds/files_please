@@ -7,8 +7,8 @@ use std::process;
 use std::thread;
 use std::time;
 
-//mod task;
 mod directory;
+mod jobs;
 mod ui;
 
 extern crate sdl3;
@@ -17,6 +17,11 @@ use sdl3::keyboard;
 
 const EXIT_CODE_OK: u8 = 0;
 const EXIT_CODE_SDL_ERROR: u8 = 1;
+
+enum InputMode {
+    Browse,
+    Search,
+}
 
 enum Action {
     Up,
@@ -29,6 +34,7 @@ enum Action {
     Prev,
     ToggleSide,
     ToggleSelect,
+    Search,
     Quit,
 }
 
@@ -63,6 +69,7 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
         eprintln!("SDL3 Display err={}", err);
         process::ExitCode::from(EXIT_CODE_SDL_ERROR)
     })?;
+    eprintln!("display = {:?}\n", display);
 
     // let display_mode = display.get_mode();
     let font = sdl_ttf
@@ -80,6 +87,8 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
         process::ExitCode::from(EXIT_CODE_SDL_ERROR)
     })?;
 
+    let mut input_mode = InputMode::Browse;
+
     let keybinds = collections::HashMap::from([
         (keyboard::Keycode::Up, Action::Up),
         (keyboard::Keycode::Down, Action::Down),
@@ -92,6 +101,7 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
         (keyboard::Keycode::Tab, Action::ToggleSide),
         (keyboard::Keycode::Space, Action::ToggleSelect),
         (keyboard::Keycode::Escape, Action::Quit),
+        (keyboard::Keycode::Slash, Action::Search),
     ]);
 
     let mut dir_path = env::current_dir().unwrap_or(path::PathBuf::from("."));
@@ -111,66 +121,76 @@ fn files_please_gui() -> Result<(), process::ExitCode> {
                 event::Event::KeyDown {
                     keycode: Some(keycode),
                     ..
-                } => {
-                    if let Some(action) = keybinds.get(&keycode) {
-                        match action {
-                            Action::Quit => return Ok(()),
-                            Action::Up => gui.up(1),
-                            Action::Down => gui.down(1),
-                            Action::Top => gui.top(),
-                            Action::Bottom => gui.bottom(),
-                            Action::JumpUp => gui.up(10),
-                            Action::JumpDown => gui.down(10),
-                            Action::Next => {
-                                if let Some(hovered_entry) = gui.hovered_entry() {
-                                    if hovered_entry.kind == directory::EntryKind::Dir {
-                                        eprintln!(
-                                            "next on hovered entry {}",
-                                            hovered_entry.name.display()
-                                        );
-                                        dir_path = gui.active_dir_path();
-                                        dir_path.push(hovered_entry.name);
-
-                                        if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
-                                            let de = directory::Entries::new(
-                                                dir_path.clone(),
-                                                read_dir_it,
+                } => match input_mode {
+                    InputMode::Browse => {
+                        if let Some(action) = keybinds.get(&keycode) {
+                            match action {
+                                Action::Quit => return Ok(()),
+                                Action::Search => input_mode = InputMode::Search,
+                                Action::Up => gui.up(1),
+                                Action::Down => gui.down(1),
+                                Action::Top => gui.top(),
+                                Action::Bottom => gui.bottom(),
+                                Action::JumpUp => gui.up(10),
+                                Action::JumpDown => gui.down(10),
+                                Action::Next => {
+                                    if let Some(hovered_entry) = gui.hovered_entry() {
+                                        if hovered_entry.kind == directory::EntryKind::Dir {
+                                            eprintln!(
+                                                "next on hovered entry {}",
+                                                hovered_entry.name.display()
                                             );
-                                            gui.update_dir_entries(de);
-                                        }
+                                            dir_path = gui.active_dir_path();
+                                            dir_path.push(hovered_entry.name);
 
-                                        gui.show_dir(dir_path.clone(), path::PathBuf::from(""));
-                                    } else if hovered_entry.kind == directory::EntryKind::File {
-                                        let mut file_path = dir_path.clone();
-                                        file_path.push(hovered_entry.name);
-                                        let open_status = process::Command::new("xdg-open")
-                                            .arg(&file_path)
-                                            .status();
-                                        eprintln!(
-                                            "open status {}={:?}",
-                                            file_path.display(),
-                                            open_status
-                                        );
+                                            if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
+                                                let de = directory::Entries::new(
+                                                    dir_path.clone(),
+                                                    read_dir_it,
+                                                );
+                                                gui.update_dir_entries(de);
+                                            }
+
+                                            gui.show_dir(dir_path.clone(), path::PathBuf::from(""));
+                                        } else if hovered_entry.kind == directory::EntryKind::File {
+                                            let mut file_path = dir_path.clone();
+                                            file_path.push(hovered_entry.name);
+                                            let open_status = process::Command::new("xdg-open")
+                                                .arg(&file_path)
+                                                .status();
+                                            eprintln!(
+                                                "open status {}={:?}",
+                                                file_path.display(),
+                                                open_status
+                                            );
+                                        }
                                     }
                                 }
-                            }
-                            Action::Prev => {
-                                dir_path = gui.active_dir_path();
-                                let from_name = path::PathBuf::from(
-                                    dir_path.file_name().unwrap_or(ffi::OsStr::new("")),
-                                );
-                                dir_path.pop();
-                                if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
-                                    let de = directory::Entries::new(dir_path.clone(), read_dir_it);
-                                    gui.update_dir_entries(de);
+                                Action::Prev => {
+                                    dir_path = gui.active_dir_path();
+                                    let from_name = path::PathBuf::from(
+                                        dir_path.file_name().unwrap_or(ffi::OsStr::new("")),
+                                    );
+                                    dir_path.pop();
+                                    if let Ok(read_dir_it) = fs::read_dir(&dir_path) {
+                                        let de =
+                                            directory::Entries::new(dir_path.clone(), read_dir_it);
+                                        gui.update_dir_entries(de);
+                                    }
+                                    gui.show_dir(dir_path.clone(), from_name);
                                 }
-                                gui.show_dir(dir_path.clone(), from_name);
+                                Action::ToggleSide => gui.toggle_side(),
+                                Action::ToggleSelect => gui.toggle_select(),
                             }
-                            Action::ToggleSide => gui.toggle_side(),
-                            Action::ToggleSelect => gui.toggle_select(),
                         }
                     }
-                }
+                    InputMode::Search => match keycode {
+                        keyboard::Keycode::Escape => {
+                            input_mode = InputMode::Browse;
+                        }
+                        _ => {}
+                    },
+                },
                 _ => {}
             }
         }

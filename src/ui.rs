@@ -3,15 +3,15 @@ use std::error;
 use std::mem;
 use std::path;
 
-//use crate::task;
-use crate::directory;
-
 extern crate sdl3;
 use sdl3::pixels;
 use sdl3::render;
 use sdl3::surface;
 use sdl3::ttf;
 use sdl3::video;
+
+use crate::directory;
+use crate::jobs;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -128,6 +128,7 @@ pub struct Theme {
     inactive: pixels::Color,
     tasks: pixels::Color,
     text: pixels::Color,
+    task_text: pixels::Color,
     cursor: pixels::Color,
     header: pixels::Color,
     selected: pixels::Color,
@@ -143,8 +144,9 @@ impl Theme {
         Theme {
             active: pixels::Color::RGB(90, 90, 90),
             inactive: pixels::Color::RGB(70, 70, 70),
-            tasks: pixels::Color::RGB(45, 200, 155),
+            tasks: pixels::Color::RGB(6, 26, 42),
             text: pixels::Color::RGB(22, 255, 44),
+            task_text: pixels::Color::RGB(80, 220, 8),
             cursor: pixels::Color::RGB(70, 50, 122),
             header: pixels::Color::RGB(250, 250, 250),
             selected: pixels::Color::RGB(250, 120, 0),
@@ -384,6 +386,24 @@ impl DirectoryView {
                     self.draw_region.y + padding + next,
                 );
 
+                let inode_text = format!("{}", entry.entry.inode);
+                let _ = text_manager.render(
+                    entity_manager,
+                    texture_manager,
+                    canvas,
+                    font,
+                    &inode_text,
+                    theme.text,
+                    18,
+                    self.draw_region.x
+                        + file_size_width
+                        + select_width * 2.0
+                        + icon_width
+                        + padding
+                        + 500.0,
+                    self.draw_region.y + padding + next,
+                );
+
                 next += 24.0;
             }
 
@@ -409,28 +429,63 @@ impl DirectoryView {
     }
 }
 
-pub struct TaskView {
-    //task: task::Task,
+pub struct JobView {
+    job: jobs::Job,
 }
 
-pub struct TasksView {
-    tasks: Vec<TaskView>,
+pub struct JobsView {
+    line_height: usize,
+    jobs: Vec<JobView>,
 }
 
-impl TasksView {
-    pub fn new() -> TasksView {
-        TasksView { tasks: vec![] }
+impl JobsView {
+    pub fn new() -> JobsView {
+        let job = jobs::Job {
+            id: uuidv7::create(),
+            params: jobs::JobParams::Copy(jobs::CopyParams {
+                src: std::path::absolute("main.rs").unwrap(),
+                dst: std::path::absolute("garbage.bin").unwrap(),
+            }),
+        };
+        JobsView {
+            line_height: 18,
+            jobs: vec![JobView { job: job }],
+        }
     }
 
     fn render(
         &self,
         canvas: &mut render::Canvas<video::Window>,
-        region: render::FRect,
-        colour: pixels::Color,
+        draw_region: render::FRect,
+        theme: &Theme,
+        entity_manager: &mut EntityManager,
+        text_manager: &mut TextManager,
+        texture_manager: &mut TextureManager,
         font: &sdl3::ttf::Font,
     ) -> Result<(), Box<dyn error::Error>> {
-        canvas.set_draw_color(colour);
-        let _ = canvas.fill_rect(region);
+        canvas.set_draw_color(theme.tasks);
+        let _ = canvas.fill_rect(draw_region);
+
+        for idx in 0..self.jobs.len() {
+            let job = &self.jobs[idx].job;
+            let job_text = match &job.params {
+                jobs::JobParams::Copy(jobs::CopyParams { src, dst }) => {
+                    format!("Job#{} = from {:#?} to {:#?}", job.id, src, dst)
+                }
+            };
+
+            let _ = text_manager.render(
+                entity_manager,
+                texture_manager,
+                canvas,
+                font,
+                &job_text,
+                theme.task_text,
+                self.line_height,
+                draw_region.x,
+                draw_region.y,
+            );
+        }
 
         Ok(())
     }
@@ -457,7 +512,7 @@ pub struct UI<'ui> {
     font: &'ui sdl3::ttf::Font<'ui, 'ui>,
     lhs: DirectoryView,
     rhs: DirectoryView,
-    tv: TasksView,
+    jobs_view: JobsView,
 }
 
 impl<'ui> UI<'ui> {
@@ -489,7 +544,7 @@ impl<'ui> UI<'ui> {
             font: font,
             lhs: DirectoryView::from(&left_entries),
             rhs: DirectoryView::from(&right_entries),
-            tv: TasksView::new(),
+            jobs_view: JobsView::new(),
         };
         ui.lhs.selected_index = Some(0);
         ui.rhs.selected_index = Some(0);
@@ -662,9 +717,15 @@ impl<'ui> UI<'ui> {
         );
 
         let tasks_region = render::FRect::new(0.0, hh - 200.0, ww, 200.0);
-        let _ = self
-            .tv
-            .render(canvas, tasks_region, self.theme.tasks, self.font);
+        let _ = self.jobs_view.render(
+            canvas,
+            tasks_region,
+            &self.theme,
+            &mut self.entity_manager,
+            &mut self.text_manager,
+            &mut self.texture_manager,
+            self.font,
+        );
 
         canvas.present();
     }
